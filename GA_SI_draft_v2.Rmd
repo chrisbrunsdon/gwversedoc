@@ -559,7 +559,7 @@ There are several built-in datasets. Most of these are used in the example code 
 ## 4. Geographically weighted discriminant analysis
 
 + `bw.gwda`: A function for automatic bandwidth selection for GW Discriminant Analysis using a cross-validation approach only
-+ `gwda`: This function implements GW discriminant analysis.
++ `gwda`: A function to implement GW discriminant analysis.
 
 # References
 
