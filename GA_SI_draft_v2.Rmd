@@ -18,26 +18,18 @@ library(kableExtra)
 # lex: 195
 # chris 48
 # harry: 38
+
+library(usethis)
+use_git_config(user.name = "lexcomber", user.email = "a.comber@leeds.ac.uk")
+gitcreds_set()
+# then 2: Replace these credentials
+# Enter new password or token:
+
 ```
 
 
 ```{r echo = F, message = F, warning=F}
 library(tidyverse)
-
-# some data workings
-df = read.csv("scopus.csv")
-df %>% 
-  # filter(Year != "2021") %>% 
-  group_by(Year) %>% 
-  summarise(`Annual Publication Count` = n()) %>%
-  ggplot(mapping = aes(x = Year, y = `Annual Publication Count`)) + 
-  geom_bar(stat="identity") -> P1
-
-#df %>% filter(Year != "2021") %>% group_by(Year) %>% 
-#  summarise(`Annual Citation Count` = sum(Cited.by, na.rm = T)) %>%
-#  ggplot(mapping = aes(x = Year, y = `Annual Citation Count`)) + 
-#  geom_bar(stat="identity") -> P2
-
 
 df = read.csv("scopus_GW_GWR_GeogWeightReg.csv")
 df %>% 
@@ -68,7 +60,7 @@ y %>% filter(package == "GWmodel") %>% summarise(t = sum(downloads)) -> bio.down
 
 
 # Abstract
-Geographically weighted regression (GWR) is a popular approach for investigating the spatial variation in relationships between response and predictor variables, and critically for investigating and understanding process spatial heterogeneity. It has been refined to accommodate outliers, hetroskedasticity and local collinearity and extended to LASSO and elastic net forms. The geographically weighted (GW) framework  is increasingly used to accommodate different types of models and analyses reflecting a wider desire to explore spatial variation in model parameters or components and to move away from global, "whole map" approaches. However the growth in the use of GWR and different GW models has only been partially supported by package development in both R and Python, the major coding environments for spatial analysis. The  result is that refinements have been inconsistently included (if at all) within GWR functions in any given package. An example the `GWmodel` R package, which despite including the greatest number of GWR and GW related tools, has been developed and extended on a piecemeal basis with no overarching schema. This paper outlines the structure of a new `gwverse` package, that will over time replace `GWmodel`, that takes advantage of recent developments in the composition of complex, integrated packages. It conceptualises `gwverse` as having a modular structure, that separates core GW functionality and applications such as GWR. It adopts a *function factory* approach, in which bespoke functions are created and returned to the user based on user-defined parameters. Function factory approaches and the functions they generate have the advantage of enclosing environments that are execution environments of the function. The paper introduces and demonstrates two modules (written as linked packages) that can be used to undertake GWR as an initial transect through the proposed `gwverse` schema, and to support user defined GW modules, before discussing a number of key considerations and next steps. 
+Geographically weighted regression (GWR) is a popular approach for investigating the spatial variation in relationships between response and predictor variables, and critically for investigating and understanding process spatial heterogeneity. It has been refined to accommodate outliers, hetroskedasticity and local collinearity and extended to LASSO and elastic net forms. The geographically weighted (GW) framework  is increasingly used to accommodate different types of models and analyses reflecting a wider desire to explore spatial variation in model parameters or components and to move away from global, "whole map" approaches. However the growth in the use of GWR and different GW models has only been partially supported by package development in both R and Python, the major coding environments for spatial analysis. The  result is that refinements have been inconsistently included (if at all) within GWR and GW functions in any given package. As an example, the `GWmodel` R package, which despite including the greatest number of GWR and GW related tools, has been developed and extended on a piecemeal basis with no overarching schema. This paper outlines the structure of a new `gwverse` package, that will over time replace `GWmodel`, that takes advantage of recent developments in the composition of complex, integrated packages. It conceptualises `gwverse` as having a modular structure, that separates core GW functionality and applications such as GWR. It adopts a *function factory* approach, in which bespoke functions are created and returned to the user based on user-defined parameters. Function factory approaches and the functions they generate have the advantage of enclosing environments that are execution environments of the function. The paper introduces and demonstrates two modules (written as linked packages) that can be used to undertake GWR as an initial transect through the proposed `gwverse` schema, and to support user defined GW modules, before discussing a number of key considerations and next steps. 
 
 
 # 1. Introduction
@@ -140,13 +132,14 @@ The `sf` structure follows a 'tidy' framework [@wickham2014tidy] and can be used
 Hence, due to its complexity, over-flowing structures inconsistent application of refinements, and the fact that it has not been revised to work with `sf` format spatial objects, the `GWmodel` package is ripe for an overhaul. The need for this is enhanced because of the ever-growing popularity of GWR and the GW framework and the increasing use of `GWmodel` to undertake these analyses. The next section sketches out the form that this overhaul could take for a new `gwverse` package and considers *function factories* as an approach for doing this.
 
 ```{r tab1, echo= F}
-df = read.csv("tab1_v2.csv")
+df = read.csv("tab1_v3.csv")
 names(df) = gsub("\\.", " ", names(df))
+
 index = t(apply(df, 1, function(x) is.na(x)))
 df[index] = "-"
 
 knitr::kable(df,
-             caption = "GWmodel package functionality by the main groups of related functions (* for mean/median only) where applicable.",
+             caption = "The presence of GWmodel package functionality by the main groups of related functions (* for mean/median only), where applicable.",
              format="latex", booktabs=TRUE, linesep = "" ) %>% 
   column_spec(2:6, width = "2cm") #%>%
   #kable_styling(latex_options="scale_down")
@@ -397,7 +390,7 @@ There are many potential areas of further developments such as tidy consideratio
 
 # 4. Discussion and Conclusion
 
-Here we propose a broad framework for the development of geographically weighted methods for spatial data analysis.   Below, some implications of this proposal will be considered.  As proposers we expect to lead some of the initial contributions – we see development of the core `gw` worktools,  followed by further development of the package for basic GWR (`gwregr`) as the likely first contributions,  moving on to geographically weighted generalized linear model tools,  such as Poisson and binomial regression.  Other priorities include geographically weighted descriptive statistics and PCA. We would encourage others working in specified fields to contribute – for example the remote sensing community may develop GW correspondence analysis or partial least squares approaches for classification,  ecologists may develop geographically weighted redundancy analysis, GW variance partitioning, or GW canonical correspondence analysis.  
+Here we propose a broad framework for the development of geographically weighted methods for spatial data analysis.   Below, some implications of this proposal will be considered.  As proposers we expect to lead some of the initial contributions – we see development of the core `gw` worktools,  followed by further development of the package for basic GWR (`gwregr`) as the likely first contributions,  moving on to geographically weighted generalized linear model tools,  such as Poisson and binomial regression.  Other priorities include geographically weighted descriptive statistics and PCA. We would encourage others working in specified fields to contribute – for example the remote sensing community may develop GW correspondence analysis or discriminant analysis approaches for classification,  ecologists may develop geographically weighted redundancy analysis, GW variance partitioning, or GW canonical correspondence analysis.  
 
 The function factory approach  provides a versatile framework but also there are technical considerations. When the techniques are used,  specific 'building block' functions are 'bound in',  for ease of use, but using this approach to create the techniques makes the specification of building blocks open and explicit,  as well as consistent.  An alternative may be to specify the building block functions as arguments to the main function. However, as well as ending up with a very complex argument list,  there are issues relating to passing values to the building block functions,  as well as handling the R dot-dot-dot (`...`) parameter syntax  and partial parameter name matches [@geyer2020mcmc]. There are, however some potential problems which must be considered.   For example,  when binding very large environments to a function (such as a large spatial database), this involves making a copy of that database – which could lead to storage or memory issues.   There is a need for a set of guidelines on good practice for the use of function factories. 
 
@@ -405,7 +398,7 @@ There are issues in code development to be addressed.  For example in the `GWmod
 
 Also,  interoperability between the `gwverse` approach and other R packages and package families can be considered.   For example,  many users are now trained to work primarily with pipeline operators in R (either the `%>%` operator from `magrittr`, or the native `|>` operator) and designing gwverse functions to combine simply and intuitively with tools from other packages is an important consideration.  This involves thought about which argument in `gwverse` functions should be first,  and what form the returned value of the functions take.  Ideally,  one would wish `gwverse` functions to combine easily with functions from `sf`  and data manipulation tools from `tidyverse`.
 
-Some organizational issues also require consideration. In particular we are proposing a family of R packages,  maintained on GitHub,  with periodic updates to CRAN.   Although the approach here involves – and indeed encourages – collaboration, the project will require curation (much as CRAN does,  but on a much smaller scale),  and some structure for this needs to be agreed. This needs to address standards for package `gwverse` contribution – for example,  checking that the package properly meets the function naming requirements set out above,   and assessing whether any attached vignettes well written and with sufficient content,  and checking whether CRAN’s requirements are met when versions are submitted there. There may also be issues of managing contributions – for example if two contributors simultaneously propose packages for the same (or at least overlapping) GW techniques.  Another related issue may be to create guidelines for developers,  possibly combined with a 'how-to' manual outlining the use of GitHub,  and the agreed curation framework.  In this way users who have a question with no current means of investigation could be encouraged to become developers.
+Some organizational issues also require consideration. In particular we are proposing a family of R packages,  maintained on GitHub,  with periodic updates to CRAN.   Although the approach here involves – and indeed encourages – collaboration, the project will require curation (much as CRAN does,  but on a much smaller scale),  and some structure for this needs to be agreed. This needs to address standards for package `gwverse` contribution – for example,  checking that the package properly meets the function naming requirements set out above,   and assessing whether any attached vignettes are well written and with sufficient content,  and checking whether CRAN’s requirements are met when versions are submitted there. There may also be issues of managing contributions – for example if two contributors simultaneously propose packages for the same (or at least overlapping) GW techniques.  Another related issue may be to create guidelines for developers,  possibly combined with a 'how-to' manual outlining the use of GitHub,  and the agreed curation framework.  In this way users who have a question with no current means of investigation could be encouraged to become developers.
 
 In conclusion, in this paper we have presented a framework for developing a consistent and interoperable family of R packages for geographically weighted analytical methods.  We advocate the use of functionals and function factories as key principles in this framework. This offers a number of advantages: it facilitates the creation of packages having a consistent interface – so that for example an argument to a function specifying bandwidth always has the same name and the data supplied always has the same format. In addition,  the use of a GW core package ensures that procedures appearing in several geographically weighted methods do not have to be re-created repeatedly (and possibly inconsistently) in several packages. With current trends suggesting an increasing interest in a number of new approaches, such as space-time weighting and multiscale models, perhaps now is an advantageous time to provide a consistent set of tools for software development.   Potentially this brings together disparate GW working groups (of both users and developers) together under the same framework with mutual benefit to all, allowing rapid development of new GW models with a more streamlined community review process.
 

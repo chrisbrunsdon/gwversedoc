@@ -1,0 +1,15 @@
+﻿Function,GW Summary Statistics,GW Principal Components Analysis,GW Regression,GW Generalised Linear Models,GW Discriminant Analysis
+Flexible Distance Metric,Yes,Yes,Yes,Yes,Yes
+Five kernel functions,Yes,Yes,Yes,Yes,Yes
+Fixed/adaptive bandwidth,Yes,Yes,Yes,Yes,Yes
+Bandwidth optimization,Yes*,Yes,Yes,Yes,Yes
+Robust choice for outliers,Yes,Yes,Yes,No,No
+Heteroskedastic errors,NA,NA,Yes,No,NA
+Ridge term,NA,NA,Yes,No,NA
+F- Tests (Leung),NA,NA,Yes,NA,NA
+Monte Carlo Tests ,Yes,Yes,Yes,No,No
+Bootstrap SE estimation,No,No,Yes,No,No
+Local coefficient t-tests,NA,NA,Yes,Yes,No
+Multiscale extension,NA,NA,Yes,No,No
+Space-time,No,No,Yes,No,No
+High performance,No,No,Yes,No,No
