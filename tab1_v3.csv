@@ -1,4 +1,4 @@
-﻿Function,GW Summary Statistics,GW Principal Components Analysis,GW Regression,GW Generalised Linear Models,GW Discriminant Analysis
+Option,GW Summary Statistics,GW Principal Components Analysis,GW Regression,GW Generalised Linear Models,GW Discriminant Analysis
 Flexible Distance Metric,Yes,Yes,Yes,Yes,Yes
 Five kernel functions,Yes,Yes,Yes,Yes,Yes
 Fixed/adaptive bandwidth,Yes,Yes,Yes,Yes,Yes
