@@ -1,6 +1,6 @@
 ---
 title: "`gwverse`: a template for a new generic Geographically Weighted R package"
-author: "Lex Comber, Chris Brunsdon, Paul Harris, Binbin Lu, Nick Malleson"
+author: "Lex Comber, Chris Brunsdon, Paul Horris, Binbin Lu, Nick Malleson"
 date: "September 2021"
 output:
   pdf_document: default
