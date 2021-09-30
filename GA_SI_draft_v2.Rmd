@@ -1,13 +1,23 @@
 ---
 title: "`gwverse`: a template for a new generic Geographically Weighted R package"
-author: "Lex Comber, Chris Brunsdon, Martin Callaghan, Paul Harris, Binbin Lu, Nick Malleson"
+author: "Lex Comber^1^*, Chris Brunsdon^2^, Martin Callaghan^1^, Paul Harris^3^, Binbin Lu^4^, Nick Malleson^1^"
 date: "September 2021"
 output:
-  pdf_document: default
-  html_document: default
-
+  pdf_document: 
+    keep_tex: True
 bibliography: gw_SI_paper.bib
 ---
+
+^1^ University of Leeds, UK
+
+^2^ Maynooth University, Ireland
+
+^3^ Rothamsted Research, UK
+
+^4^ Wuhan University, China
+
+\* Email:  a.comber@leeds.ac.uk 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, fig.align='center',message=FALSE,warning=FALSE)
 library(knitr)
