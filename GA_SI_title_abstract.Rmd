@@ -1,0 +1,24 @@
+---
+title: "`gwverse`: a template for a new generic Geographically Weighted R package"
+author: "Lex Comber^1^*, Chris Brunsdon^2^, Martin Callaghan^1^, Paul Harris^3^, Binbin Lu^4^, Nick Malleson^1^"
+output:
+  pdf_document: 
+    keep_tex: True
+bibliography: gw_SI_paper.bib
+---
+
+^1^ University of Leeds, UK
+
+^2^ Maynooth University, Ireland
+
+^3^ Rothamsted Research, UK
+
+^4^ Wuhan University, China
+
+\* Email:  a.comber@leeds.ac.uk 
+
+# Abstract - text
+GWR is a popular approach for investigating the spatial variation in relationships between response and predictor variables, and critically for investigating and understanding process spatial heterogeneity. The geographically weighted (GW) framework is increasingly used to accommodate different types of models and analyses reflecting a wider desire to explore spatial variation in model parameters or components. However, the growth in the use of GWR and different GW models has only been partially supported by package development in both R and Python, the major coding environments for spatial analysis. The result is that refinements have been inconsistently included (if at all) within GWR and GW functions in any given package. This paper outlines the structure of a new gwverse package, that will over time replace GWmodel, that takes advantage of recent developments in the composition of complex, integrated packages. It conceptualises gwverse as having a modular structure, that separates core GW functionality and applications such as GWR. It adopts a function factory approach, in which bespoke functions are created and returned to the user based on user-defined parameters. The paper introduces two demonstrator modules that can be used to undertake GWR and identifies a number of key considerations and next steps.
+
+
+

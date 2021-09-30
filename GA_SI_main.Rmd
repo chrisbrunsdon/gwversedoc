@@ -1,0 +1,550 @@
+---
+title: "`gwverse`: a template for a new generic Geographically Weighted R package"
+output:
+  pdf_document: 
+    keep_tex: True
+bibliography: gw_SI_paper.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align='center',message=FALSE,warning=FALSE)
+library(knitr)
+library(kableExtra)
+```
+
+```{r echo = F, message = F, warning=F}
+library(tidyverse)
+
+df = read.csv("scopus_GW_GWR_GeogWeightReg.csv")
+df %>% 
+  filter(Year > "1995" & Year < 2022) %>% 
+  group_by(Year) %>% 
+  summarise(`Annual Publication Count` = n()) %>%
+  ggplot(mapping = aes(x = Year, y = `Annual Publication Count`)) + 
+  geom_bar(stat="identity") -> P1
+
+```
+
+```{r eval = T, echo= F, cache = T}
+# from https://cran.r-project.org/web/packages/dlstats/vignettes/dlstats.html
+library(dlstats)
+x <- cran_stats(c("spgwr", "GWmodel", "McSpatial", "lctools"))
+#ggplot(x, aes(end, downloads, group=package, color=package)) +
+#  geom_line() + geom_point(aes(shape=package))
+pkgs = c("spgwr", "GWmodel", "McSpatial", "lctools")
+y <- bioc_stats(pkgs)
+ggplot(rbind(x,y), aes(end, downloads, group=package, color=package)) +
+  geom_line(lty = 2) + 
+  geom_smooth(method = "gam") + theme_bw() + 
+  ylab("Downlaods") + xlab("Date") +
+  scale_color_brewer(palette = "Spectral", name = "Package") -> P2
+y %>% filter(package == "GWmodel") %>% summarise(t = sum(downloads)) -> bio.downloads
+```
+
+
+
+# Abstract
+GWR is a popular approach for investigating the spatial variation in relationships between response and predictor variables, and critically for investigating and understanding process spatial heterogeneity. The geographically weighted (GW) framework is increasingly used to accommodate different types of models and analyses reflecting a wider desire to explore spatial variation in model parameters or components. However, the growth in the use of GWR and different GW models has only been partially supported by package development in both R and Python, the major coding environments for spatial analysis. The result is that refinements have been inconsistently included (if at all) within GWR and GW functions in any given package. This paper outlines the structure of a new `gwverse` package, that will over time replace `GWmodel`, that takes advantage of recent developments in the composition of complex, integrated packages. It conceptualises `gwverse` as having a modular structure, that separates core GW functionality and applications such as GWR. It adopts a function factory approach, in which bespoke functions are created and returned to the user based on user-defined parameters. The paper introduces two demonstrator modules that can be used to undertake GWR and identifies a number of key considerations and next steps. 
+
+
+# 1. Introduction
+
+This paper describes the structure of a new over-arching R package called `gwverse` that includes some -- but not all -- packages for different geographically weighted tools. The aim in doing this is two-fold. First, to re-imagine the functionality of the `GWmodel` package [@lu2014gwmodel; @gollini2015gwmodel] that can be used for geographically weighted analyses of different kinds in R, including regression. Second, and just as importantly, to include within the new framework, structures that facilitate the development and integration of user-defined geographically weighted tools, able to draw from the core functionality provided by `gwverse`. The reasons for doing this are to propose a framework that better supports users in undertaking such analyses analyses, and critically, allows developers to easily create and benchmark their own geographically weighted tools.
+
+Geographically Weighted Regression (GWR, @brunsdon1996geographically) investigates the spatial variation in relationships between response and predictor variables. It reflects a desire to shift away from global whole map regressions [@openshaw1996developing] such as those estimated by ordinary least squares (OLS), and including those that account for error spatial dependence, such as regressions estimated by restricted maximum likelihood (REML). GWR  arose due to more broader interests in investigating and understanding process spatial heterogeneity.
+
+GWR is increasingly being used for spatial analyses. A search of the Scopus database  (https://www.scopus.com) in September 22 2020 for the phrases "GWR", "Geographically Weighted" or "Geographically Weighted Regression" in titles, abstracts and keywords indicated `r nrow(df)` records, with sharp increases in recent years (see Figure \ref{fig:fig1}). 
+
+```{r, fig1, echo=F, fig.cap = "Geographically Weighted Regression publication numbers, 1996 to 2021, as listed on https://www.scopus.com.", fig.width = 7}
+P1 +theme_bw()
+```
+
+This proliferation has been driven by a four main factors [@comber2020gwr].  First, is the increase in the generation, provision and availability of spatial data (i.e. data with some form of location attached), and their ability to support inherently spatial analyses (i.e. analyses that explicitly accommodate the spatial properties of data). Second, is a broader recognition by researchers from different quantitative domains of the benefits of quantifying spatial patterns in data, say through some kind of spatially informed cluster analysis or regression technique, and in doing so handle spatial dependencies in the data or the model parameters themselves. This has in part been driven by the evolving adoption of the First Law of Geography as invoked by Tobler [@tobler1970computer] as a guiding principle, which in essence describes process spatial autocorrelation (typically dependency in the data), and process spatial heterogeneity (typically dependency in model parameters). GWR is a method that was designed to support the latter, while will commonly indirectly address the former [@harris2019simulation]. Third, is the relative simplicity and conceptual elegance of GWR as a spatial model, which has helped to fuel its popularity. OLS regression is the basic modelling approach (modelling 101), and the creation of local regression models calibrated from data under a moving window, as GWR does, is conceptually intuitive to understand. Fourth, as a result GWR has been implemented in a number of GISs (e.g. ESRI’s ArcGIS); in R packages such as `spgwr` [@bivand2020package], `mgwrsar` [@geniaux2018new],  `GWLelast` [@yoneoka2016new], `gwrr` [@wheeler2013gwrr], `GWmodel` [@lu2014gwmodel; @gollini2015gwmodel], `McSpatial` [@mcmillen2013package] and `lctools` [@kalogirou2020package]; in Python packages such as `PySal` [@rey2010pysal] and `mgwr` [@oshan2019mgwr]; and in standalone implementations such as `GWR3` [@charlton2003], `GWR4` [@nakaya2014gwr4] and `MGWR` [@limgwr]. 
+
+GWR itself has been refined to accommodate extensions found in standard regression, such outlier-resistant 
+[@fotheringham2003geographically;, @harris2010robust], heteroskedastic [@fotheringham2003geographically; @paez2002general; @paez2002general2], ridge [@wheeler2007diagnostic; @gollini2015gwmodel], LASSO [@wheeler2009simultaneous] and elastic net form [@li2018geographically; @comber2018geographically]. Further extensions include time in the form of geographically and temporally weighted regression (GTWR) [@huang2010geographically; @fotheringham2015geographical], area to point regression [@murakami2015area], multiple scales of analysis [@yang2014extension; @fotheringham2017multiscale], spatially variable model specification [@comber2018hyper] and the use of different distance metrics [@lu2016minkowski].
+
+A secondary tranche of developments has seen the use of the Geographically Weighted (GW) framework as a generic structure to accommodate different types of models and analyses. Again this reflects a desire to explore spatial variation in model parameters or its components and to move away from global, "whole map" approaches. Examples include GW principal components analysis (PCA) [@harris2011geographically], GW descriptive statistics [@brunsdon2002geographically], GW discriminant analysis [@brunsdon2007geographically; @foley2013using], GW correspondence matrices and error reporting [@comber2017geographically], GW structural equation models [@comber2017gwsem], GW evidence combination [@comber2016geographically], GW Variograms [@harris2010moving], GW network design [@harris2014geographically], GW Kriging [@harris2010moving; @harris2011links], GW visualization techniques [@dykes2007geographically], and more recently GW artificial neural networks [@du2020geographically; @hagenauer2021geographically] and GW machine learning [@chen2018estimation; @li2019geographically; @quinones2021geographically; @xu2021spatial]. In each of these developments, the moving window or kernel is still used to generate local data subsets as is done in GWR, that are weighted by their distance to the kernel centre, thereby providing local inputs to the model, analysis or evaluation being applied. These various GW models demonstrate a generic, open, and continually evolving technical framework that is being used to explore spatial heterogeneities from a wide range of disciplines in the natural and social sciences.
+
+The growth in the use of GWR and in GW models of different kinds, as well as the refinements to GWR, has been supported to some degree by package development in both R and Python. However, much of the development has taken place on a piecemeal basis, extending current functionality, without consideration of any overarching schema, nor of more recent developments in thinking around the composition of complex, integrated packages that incorporate a *function factory* approach. The aim of this paper is to critically examine the developments in the package offering the greatest range of GWR and RW related functionality, the `GWmodel` R package [@lu2014gwmodel; @@gollini2015gwmodel], to propose an organisational framework within which a new GWR / GW R package will be developed, and to illustrate the first iteration of this in a new `gwverse` R package. In so doing the paper seeks to describe a comprehensive ecology for undertaking GWR and other GW models, that is also able to support the generation of user-defined GW tools.
+
+
+# 2. Background: The current `GWmodel` R package
+
+```{r, gwmodelstats, eval = T, echo = F, cache = T, warning=F, message=F}
+# used to create the plot in Figure 3
+library(RCurl)
+library(jsonlite)
+library(tidyverse)
+#date.end <- seq(as.Date("2013-12-01"),length=8,by="years")
+#date.start = seq(as.Date("2013-01-01"),length=8,by="years")
+date.start = seq(as.Date("2013-01-01"),length=(8*12)+1,by="months")
+date.end = date.start[-1]-1
+date.start = date.start[-length(date.start)]
+for (i in 1:length(date.end)){
+  url = paste0("https://cranlogs.r-pkg.org/downloads/total/", date.start[i], ":", date.end[i], "/GWmodel")
+  data.i <- getForm(url)
+  # convert to data frame
+  data.i <- fromJSON(data.i)
+  if (i == 1) res = data.i
+  if (i > 1) res = rbind(res, data.i)
+}
+p3 <- 
+  res %>% mutate(start = as.Date(start), end = as.Date(end)) %>% 
+  mutate(mid = start + (end-start)/2) %>% 
+  ggplot(aes(x = mid, y = downloads, group = 1)) +
+  geom_line(lty = 2, col = "indianred") + 
+  geom_smooth(method = "gam", col = "firebrick3") + 
+  theme_bw() +
+  ylab("Downlaods") + xlab("") + 
+  scale_x_date(breaks = seq(as.Date("2013-01-16"), as.Date("2021-01-16"), by="6 months"), date_labels = "%b\n%Y")
+cran.downloads = sum(res$downloads)
+tot.downloads = as.vector(unlist(bio.downloads +cran.downloads))
+``` 
+
+The `GWmodel` package provides the most comprehensive suite of GWR and GW related tools. It contains various forms of GWR, some of which have both basic and outlier resistant forms, some with local statistical tests and diagnostics, a generalised linear model form, some with options for flexible choices of distance metrics [@lu2016minkowski] and a generalised linear model form [@fotheringham2003geographically]. It also contains a number of different functions based on the GW scheme, including tools for GW descriptive statistics, GW PCA and GW discriminant analysis. As of September 2021, the `GWmodel` package has been downloaded more than `r tot.downloads` times since it was released on CRAN in 2013 (as recorded on the CRAN download counts web page and the BioConductor site). Monthly CRAN downloads are shown in Figure \ref{fig:fig2}, indicating the increasing attraction of the package to users from a wide range of disciplines. Additionally, the package functionality has been constantly extended to accommodate refinements and requests for tools from users and the package management team. For example, modules have been incorporated over the last five years to support GWR with large-scale data sets [@murakami2020scalable], multiscale GWR [@lu2017geographically; @lu2018improvements] as well as functions for GTWR and revised algorithms for GW discriminant analysis and GW PCA. 
+
+```{r, fig2, echo=F, fig.cap = "Monthly downloads of the GWmodel package from CRAN, the Comprehensive R Archive Network.", fig.width = 7}
+p3
+```
+
+One of the development problems, that occurs with many projects managed by people in their spare or part-funded time, is that this growth in package functionally mostly occurs on a piecemeal basis without the over-arching organisation of the package being considered or revised from its original structure. An example of this is that the `GWmodel` manual is some 85 pages in length [@gollini2015gwmodel], with varying depth of detail and two vignettes, published with the launch of the package [@lu2014gwmodel; @gollini2015gwmodel]. The `GWmodel` help pages are similarly inconsistent. Some functions have examples with in-depth explanations and some do not. Many of the recent developments in package functionality do not have vignettes, have ones that are inconsistent or have not been described in the help pages to sufficient depth (there are also some help pages where the example does not work). The result is that there is little to guide the user about which functions to use and how to use them, especially for the newer functions. This inconsistency is shown in Table \ref{tab:tab1} which indicates the various refinements and specification options that have been incorporated into different functions of `GWmodel` as part of these developments, and the full description of the package is contained in the Appendix.  What is clear from  Table \ref{tab:tab1} is that whilst the complexity of the package has increased, allowing more refined approaches to GWR for example, this refinement has not been uniform across the main groups of GWR functionality, or for that matter any GW model. 
+
+A further critical consideration for `GWmodel` is that currently it only supports analyses of spatial data in `sp` format [@pebesma2005s]. In the `sp` data model, spatial objects can be thought of containing a data table of attributes and a list structure of geometric information for the different kinds of spatial objects (e.g. `SpatialPointsDataFrame`, `SpatialPolygonsDataFrame` etc), where each row in the data frame is associated with an individual component or element of the geometric information. The `sp` class of objects is broadly analogous to shapefile formats (lines, points, areas) and raster or grid formats. However, `sp` is in the process of being deprecated and has been replaced by a new class of spatial object called `simple features` as implemented in the `sf` package [@pebesma2018simple]. This encodes spatial data in a way that conforms to formal standards defined in the ISO 19125-1:2004 standard. It defines a model that allows for two-dimensional linear interpolation between vertices and represents geometry in text (Well-known text - WKT) forms. 
+
+The `sf` structure follows a 'tidy' framework [@wickham2014tidy] and can be used with both the new native piping syntax and the  `magrittr` to undertake `dplyr` data wrangling operations. Spatial objects in `sf` format appear as a data table but with an extra `geometry` column that contains the WKT geometrical information. The geometry (called an `sfc` or simple feature column) can be used in geometric operations. 
+Hence, due to its complexity, over-flowing structures inconsistent application of refinements, and the fact that it has not been revised to work with `sf` format spatial objects, the `GWmodel` package is ripe for an overhaul. The need for this is enhanced because of the ever-growing popularity of GWR and the GW framework and the increasing use of `GWmodel` to undertake these analyses. The next section sketches out the form that this overhaul could take for a new `gwverse` package and considers *function factories* as an approach for doing this.
+
+```{r tab1, echo= F}
+df = read.csv("tab1_v3.csv")
+names(df) = gsub("\\.", " ", names(df))
+
+index = t(apply(df, 1, function(x) is.na(x)))
+df[index] = "-"
+
+knitr::kable(df,
+             caption = "The presence of GWmodel package functionality by the main groups of related specification options (* for mean/median only), where applicable.",
+             format="latex", booktabs=TRUE, linesep = "" ) %>% 
+  column_spec(2:6, width = "2cm") #%>%
+  #kable_styling(latex_options="scale_down")
+```
+
+# 3. Proposal: `gwverse` - a template for a new GW package 
+
+## 3.1 The Basic Idea
+
+The basic idea for the `gwverse` package is to implement a modular package structure. Such structures are seen in packages such as `tidyverse`, which when called loads a number of tidyverse-related packages.  However,  it doesn't load all tidyverse-related packages,  because this may take time,  and occupy resources.  It loads more than the absolute basic `dplyr` package (for example, it loads `ggplot`) but not `feather`.   In a similar way, we  propose to have an over-arching package called `gwverse` that loads many -- but not all -- GW-related packages.   The structure has,  at its core, a package called `gw` that provides general helper functions for a GW analysis - but essentially provides a toolkit to be used in the construction of other GW modules.  It  includes tools for building GW functions,  but not the functions themselves.  
+
+It is unlikely that people other than those developing GW tools will load the `gw` package directly, rather it is implicitly loaded (imported) when GW packages are loaded. Our proposed structure and module dependencies  are shown in Figure \ref{fig:fig3}.In this, the boxes represent packages,  and the directional arrows imply 'makes use of' or 'draws functionality from'. So for example, `gwregr` (for GWR), `gwpca` (for GW PCA) and `gwdesc` (for GW descriptive statistics) will all use functions contained in `gw`. The mid-layer packages are individual GW applications,   and all of these make use of `gw`.  When called, the `gwverse` package loads up several commonly used packages, although not all. The role of `gwrglm` (for GW generalised linear models) is slightly different as it will extensively borrow from the standard (Gaussian response) GWR code in `gwregr`, and hence also to load and run `gwglm` will require `gwregr` to be loaded as a dependency as well.  The packages `gwobscure` and `gwspecial` are more specialised GW packages (as yet not identified),  and so are not loaded via `gwverse`.
+
+In this structure, the use of `gw` as the core package is essential to provide a consistent interface to all of the other functions, whereas `gwverse` provides a convenient wrapper for the modules.  
+
+```{tikz, fig3, echo=FALSE, fig.align="center", out.width="0.9\\linewidth", fig.cap = "The proposed gwverse structure."}
+\usetikzlibrary{positioning,angles,calc,intersections,quotes}
+\usetikzlibrary{shapes.geometric,arrows.meta,arrows}
+\usetikzlibrary{babel}
+
+\begin{tikzpicture}[node distance= 90mm and 10mm]
+\tikzstyle{main}   = [draw,line width=0.4mm, rectangle, minimum width=1.5cm,
+                      minimum height=1cm, rounded corners,fill=blue!20!white]
+\tikzstyle{core}  =  [main,fill=red!20!white]
+\tikzstyle{uber}  =  [main,fill=yellow!20!white]
+\tikzstyle{meza}  =  [main,fill=blue!10!white]
+\tikzstyle{peri}  =  [main,fill=cyan!20!white]
+
+\tikzstyle{arrowt} = [<-,>=triangle 60, line width=0.4mm]
+\tikzstyle{arrowf} = [arrowt,->]
+
+\node[core] (gw)         {\texttt{\large gw}}; 
+\node[meza] (gwglm)      [below =30mm of gw]     {\texttt{\large gwglm}};
+\node[main] (gwr)        [right = 0.4cm of gwglm]     {\texttt{\large gwregr}}; 
+\node[uber] (gwverse)    [below = 30mm of gwglm]     {\texttt{\LARGE gwverse}}; 
+\node[main] (gwpca)      [left = 0.4cm of gwglm]      {\texttt{\large gwpca}}; 
+\node[main] (gwdesc)     [right =0.4cm of gwr]     {\texttt{\large gwdesc}}; 
+\node[main] (gwother)    [left =0.4cm of gwpca]    {\texttt{\large gwother}}; 
+\node[peri] (gwobscure)  [left =0.4cm of gwother]  {\texttt{\large gwobscure}}; 
+\node[peri] (gwspecial)  [right =0.4cm of gwdesc]  {\texttt{\large gwspecial}}; 
+\draw[arrowf] (gw) -- (gwr); 
+\draw[arrowf] (gw) -- (gwpca); 
+\draw[arrowf] (gw.south east) -| (gwdesc); 
+\draw[arrowf] (gw.south west) -| (gwother);
+\draw[arrowf] (gw.east) -| (gwspecial);
+\draw[arrowf] (gw.west) -| (gwobscure);
+\draw[arrowf] (gw) -- (gwglm);
+\draw[arrowt] (gwverse) -- (gwr); 
+\draw[arrowt] (gwverse) -- (gwpca); 
+\draw[arrowt] (gwverse) -| (gwdesc); 
+\draw[arrowt] (gwverse) -| (gwother);
+\draw[arrowt] (gwverse) -- (gwglm);
+\draw[arrowt] (gwglm) -- (gwr);
+
+\end{tikzpicture} 
+
+```
+
+## 3.2 GW models
+
+The GW framework, for regression, or any other analysis, has at its core a set of fundamental operations: the identification of nearby observations to the location being considered (i.e. observations under the kernel) and calculation of weights for those observations based on their distance to the location (i.e the kernel centre). The precise form of the functions that are used to undertake these operations will depend on user-specified choices about:
+
+- kernel bandwidth type: a fixed bandwidth of a uniform size (distance), or an adaptive one in in which size (distance) varies but the number of observations is fixed or uniform;
+- kernel function shape: the form of the distance weighting, with choices of Gaussian, exponential, bisquare, tricube or boxcar and many more.
+
+After the kernel bandwidth type and shape have been defined, they can be applied to extract and weight local data in some kind of GW analysis. For example, in GWR they are used to create a series of local regressions (returning local coefficients and other regression related outputs), in a GW discriminant analysis they are used to determine the local posterior class probabilities,, in a GW PCA they are used to determine the local components, local loadings and local scores. 
+
+The operation of a given GW model such as GWR has two stages:
+
+1. Determination of the kernel bandwidth size (whether fixed or adaptive) typically through some form of optimal evaluation;
+1. Application of the optimal bandwidth in the final model.
+
+The nature of these stages are specific to the particular GW model and can depend on whether or not some objective function exists (typically whether or not the model can predict). In this respect a regression might use a leave-one-out cross validation (CV) or an Akaike Information Criterion (AIC) metric to evaluate different bandwidth sizes. A discriminant analysis might use metrics commonly generated from a correspondence analysis (matrix) such as overall classification accuracy or the Kappa statistic. 
+
+This can be illustrated by considering the case for GWR. A GWR analysis requires the optimal bandwidth to be determined and then used to generate the local regressions. A linear bandwidth search would have the following sequence, after user decisions about bandwidth type and shape:
+```{r eval = F}
+1.  for each potential bandwidth
+2.  |  for each regression point / location
+3.  |  |  identify the nearest `n` observations under the kernel
+4.  |  |  calculate the observations weights (bisquare, Gaussian etc)
+5.  |  end
+6.  |  evlauate the fit of the local regression (CV or AIC) 
+7.  end
+8.  find the best performing bandwidth via an overall CV or AIC diagnostic
+```
+
+Each GWR proceeds by undertaking steps 2 to 5 for the given bandwidth^[In reality a GWR evaluation by CV or AIC does not require the local model to be created only the observation weights at each location to be determined.]. For a different GW model such as GW discriminant analysis, the outline is the broadly the same but with different localised models in step 6 and overall evaluation in step 8. 
+
+And of course, many of these steps require a number of inputs: step 2 requires the distances between the location being considered and each observation and as this is done for each observation suggesting the need for a distance matrix of some kind; step 2 also requires a specific function to identify nearby observations depending on the bandwidth type; step 3 requires a weighting function that is specific to the bandwidth type and shape. The point being that a number of generic functions and data structures are required **in combination** by any GW model, although they are used in different ways to support different types of bandwidth evaluation and final analyses.
+
+## 3.3 A function factory approach
+
+An alternative to the `for` loop approach above is to take a function factory approach in combination with functionals. A `functional` is a function that has a function as its input and returns a vector as its output. They are commonly used alternatives to `for` loops because they are faster^[Actually they promote tighter coding and the avoidance of temporary data structures.] and more flexible. A `function factory` is a function that returns a function. They have the advantages of allowing values to be precomputed within them (such as the distance matrix mentioned above), saving computation time, of supporting a multi-level design approach that more closely reflect the structure of the problem being addressed (for example wrapping user defined kernel and bandwidth choices within steps 3 and 4 above) and this way allow the complexity of the problem to be partitioned in into more easily understood (and testable) chunks [@wickham2019advanced]. Examples of current R packages that take this approach include `MCMC` [@geyer2020mcmc]
+
+Their key advantage is that functions generated by function factories have an enclosing environment that is an execution environment of the function factory. This allows, for example, the names of functions in the enclosing environment to be associated with different function bodies, have different values in different functions generated by function factories (for example a CV or an AIC evolution function in the GWR example above.) Thus the "enclosing environment of the manufactured function is unique and constant" [@wickham2019advanced section 10.2.4]. 
+
+The `for` loop GWR schema presented above can be replaced with a function factory approach, in combination with functionals, to define a function with the `gwregr` module in Figure \ref{fig:fig3}. 
+
+First a function factory is used to create a function that returns a function to evaluate a single bandwidth, that encloses a distance matrix and the data needed for the analysis, along with user defined bandwidth choices:
+
+```{r eval = F}
+single_bw_gwr = function(spatial_data, adaptive, kernel_shape, evaluation) {
+	### input data related
+	1. create distance matrix from spatial_data 
+  ### core related (i.e. functions from gw)
+	2. create the 'get nearby observations' function (adaptive parameter)
+	3. create the 'weight nearby observations' (kernel_shape and adaptive parameters)
+	### application related (i.e. function from gwregr)
+	4. define the evaluation function (evaluation parameter)
+	### output 
+	5. define the function to be returned 
+	function(bandwidth, spatial_data, formula) {
+		create matrix of nearby locations for each observation 
+		  (using the nearby function, distance matrix and bandwidth);
+		create matrix of weights for each observation 
+	    (using weight function, nearby locations matrix and bandwidth);
+		return the results of the evaluation of the formula 
+		  (applied to the weights matrix);
+	}
+}
+```
+This is broadly equivalent in functionality to steps 2 to 6 in the `for` loop schema above. This function can be used to evaluate a single bandwidth, for a given regression model equation as specified in `formula` : 
+```{r eval = F}
+my_gwr_bandwidth_function = single_bw_gwr(spatial_data = georgia, adaptive = TRUE, 
+                                          kernel_shape = "bisquare", evaluation = "AIC")
+my_gwr_bandwidth_function(bw =100, georgia, formula)	
+```
+
+Or more commonly used to evaluate different bandwidths either using an optimise function or through a linear search:  
+```{r eval = F}
+# optimise
+optimise(my_gwr_bandwidth_function, c(10, nrow(georgia)), 
+         spatial_data=georgia, formula = formula, maximum = FALSE)
+# linear search
+bwsa = 10:nrow(georgia)
+res = sapply(bwsa, function(x) my_gwr_bandwidth_function(x, georgia, formula))
+bwsa[which.min(res)]
+```
+
+## 3.4 `gwverse` 0.0.1
+
+This approach has been used to create two new packages that provide a simple proof of concept of the new `gwverse`: the core package `gw` and a GWR package `gwregr`. These can be installed and used to undertake a GWR analysis in R, with fixed or adaptive bandwidth types, with different kernel shapes, and evaluated by either CV or corrected AIC.  
+
+The `gw` module contains three functions: 
+
+- `gw_get_nearby` which returns a function that identifies the observations nearby to the regression point under consideration for a given bandwidth. A different function is returned for adaptive and fixed bandwidths. The returned function takes an observation index, distance matrix and bandwidth as inputs and returns a vector of nearby observation indices.  
+- `gw_get_weight` which returns a function for different kernel weights: Gaussian, bisquare, tricube, exponential and boxcar. Again, a different function is returned for adaptive and fixed bandwidths. The returned function takes a bandwidth and a vector of distances to nearby observations as inputs. It returns a vector of weights for nearby observations. 
+- `gw_do_weight` which applies the selected weight function within an `apply` call within the function generated by the function factory. It takes as inputs, an index of observations, a bandwidth, a matrix of nearby observations for a given bandwidth, a distance matrix and the weight function. It returns a vector of weights for all observations. 
+
+The `gwregr` module contains 4 functions: 
+
+- `gw_get_lm_eval` which returns an evaluation function to evaluate the GWR results for a given bandwidth. This can be specified as "AIC" or "CV". The returned function takes as inputs the data frame of the input spatial data, a formula, the matrix of nearby locations and the matrix of their weights. It returns an AIC or CV value. 
+- `gw_single_bw_gwr` which returns a function to evaluate a single GWR bandwidth. It takes as input point or polygon spatial dataset in sf format, containing the attributes to be modelled, a logical value to indicate whether an adaptive or fixed bandwidth distance is being used, the type of distance weighting to be used, and evaluation method for the local model, either "AIC" or "CV". The returned function generates an evaluation measure.
+- `gw_do_local_lm` which undertakes the local weighted regression in an `apply` function. It takes the a vector weights (pertaining to an observation point), the formula and a flat data frame of the spatial data as inputs and returns a vector of coefficient estimates for the observation point being considered. This is not used in bandwidth selection, only in after the bandwidth has been specified.
+- `gw_regr` which returns a function to undertake GWR once the optimal bandwidth has been defined. It takes as input the spatial dataset in sf format with the attributes to modelled, a formula, a logical value to indicate whether an adaptive or fixed bandwidth types is being used, the kernel shape and the bandwidth value. The returned function generates an $n \times m$ matrix of coefficients at location ($n$) as specified in the formula ($m$).
+
+These can be installed from GitHUb as follows:
+```{r eval = F, echo = F}
+setwd("~/Desktop/my_docs_mac/leeds_work/research/gw_verse/gw_verse_R/gw_")
+library(devtools)
+load_all(".")
+setwd("~/Desktop/my_docs_mac/leeds_work/research/gw_verse/gw_verse_R/gw_regr")
+load_all(".")
+# ?gw_get_lm_eval
+```
+```{r eval = F}
+library(devtools)
+install_github("gwverse/gw")
+install_github("gwverse/gwregr")
+library(gwregr)
+```
+```{r echo = F, message = F, warning=F}
+library(gwregr)
+```
+
+The `gwregr` package imports the `sf` package for spatial data and comes with the well-known `georgia` dataset and this can be loaded:
+```{r}
+data(georgia)
+```
+
+The first thing for GWR is bandwidth selection. A function for doing this returned by the `gw_single_bw_gwr` function and the code below does this for an adaptive bandwidth and a bisquare kernel, applied over the `georgia` data, using AIC as the evaluation criteria: 
+```{r, warning=F, message=F}
+gwr_bw_func = gw_single_bw_gwr(georgia, adaptive=TRUE, kernel="bisquare", eval="AIC")
+```
+
+After defining a formula, the function can be run for a given bandwidth and returns the evolution value (in this case the AIC score):
+```{r}
+formula = as.formula(MedInc ~ PctBach + PctEld)
+gwr_bw_func(bw =100, formula)	
+```
+
+Notice how no data needs to be passed to the function that is returned as this is held in the function environment. The function environment bindings can be explored:
+```{r}
+library(rlang)
+# environments
+env_print(gwr_bw_func)
+```
+This indicates the objects and items that are bound to the function and we can examine individual environment bindings such as the weighting bi-square function:
+```{r}
+fn_env(gwr_bw_func)$weight_func
+```
+or the flat data frame extracted from `georgia`:
+```{r}
+head(fn_env(gwr_bw_func)$df)
+```
+
+A GWR analysis can proceed with this function. The optimal bandwidth can be determined using the `optimse` function or via a linear search:
+```{r}
+optimise(gwr_bw_func, c(10,nrow(georgia)), formula=formula, maximum=FALSE)
+```
+A linear search of all bandwidths using a functional is slower but confirms the search in the `optimise` function does not get lost in local minima:  
+```{r}
+# create a vector of adaptive bandwidths
+bwsa = 10:nrow(georgia)
+# apply the function to vector of bandwidths 
+res = sapply(bwsa, function(x) gwr_bw_func(x, formula))
+bwsa[which.min(res)]
+```
+
+Finally a GWR analysis can be undertaken using that bandwidth:
+```{r, warning=F, message=F}
+bw = bwsa[which.min(res)]
+gwr_func = gw_regr(formula, georgia, adaptive = T, "bisquare", bw)
+coef_mat = gwr_func(formula)
+head(coef_mat)
+```
+
+And the results mapped:
+```{r fig.cap = "The coefficient estimates for PctBach from a GWR."}
+library(tmap)
+tm_shape(cbind(georgia, coef_mat))+ tm_fill("X2", title = "PctBach")
+```
+
+There are a number of observations associated with this approach as illustrated though this very simple package development:
+
+1. the `gwverse` provides a consistent framework for undertaking different GW analyses including GWR.
+1. functions in the core `gw_` module are never called directly by the user. Instead they are called from the modules for specific GW applications like GWR.
+1. the returned functions bind what they need within their environment. This makes them quicker than conventional approaches despite being larger in working memory.
+1. the modularisation promotes cleaner and consistent coding, allowing for "all options" of the GWR flavours in Table 1 in the future.
+1. The idea in `gw_` is that all of the user-end GW functions (e.g. for regression, PCA, etc) are defined with this function factory approach - to ensure consistency of argument names (etc.) between functions. 
+
+Additionally, there is a need for consistent naming conventions. Function factories produce **anonymous functions** - i.e. the body of a function but unassigned to a name. The name is created when the assignment happens.  This means that although the function factory approach guarantees consistency in interface,  naming is down to self-discipline. We suggest three naming rules:
+  - Everything is lower case.  This is easier to use,  as you don't have to remember whether a function is called `GWModel` or `GWmodel` for example;
+  - Spaces in names are represented as `"_"`; 
+  - All key functions begin with `gw_` - this helps on autocomplete in RStudio.
+
+There are many potential areas of further developments such as tidy considerations and whether functions should be pipe-able? i.e. with the data as the first argument, some of which are discussed below. 
+
+# 4. Discussion and Conclusion
+
+Here we propose a broad framework for the development of geographically weighted methods for spatial data analysis.   Below, some implications of this proposal will be considered.  As proposers we expect to lead some of the initial contributions – we see development of the core `gw` worktools,  followed by further development of the package for basic GWR (`gwregr`) as the likely first contributions,  moving on to geographically weighted generalized linear model tools,  such as Poisson and binomial regression.  Other priorities include geographically weighted descriptive statistics and PCA. We would encourage others working in specified fields to contribute – for example the remote sensing community may develop GW correspondence analysis or discriminant analysis approaches for classification,  ecologists may develop geographically weighted redundancy analysis, GW variance partitioning, or GW canonical correspondence analysis.  
+
+The function factory approach  provides a versatile framework but also there are technical considerations. When the techniques are used,  specific 'building block' functions are 'bound in',  for ease of use, but using this approach to create the techniques makes the specification of building blocks open and explicit,  as well as consistent.  An alternative may be to specify the building block functions as arguments to the main function. However, as well as ending up with a very complex argument list,  there are issues relating to passing values to the building block functions,  as well as handling the R dot-dot-dot (`...`) parameter syntax  and partial parameter name matches [@geyer2020mcmc]. There are, however some potential problems which must be considered.   For example,  when binding very large environments to a function (such as a large spatial database), this involves making a copy of that database – which could lead to storage or memory issues.   There is a need for a set of guidelines on good practice for the use of function factories. 
+
+There are issues in code development to be addressed.  For example in the `GWmodel` package,  extensive use of linking R to C++ was made,  to enable code to run faster.  This would also be useful in this proposal – but a consistent approach to incorporating compiled C++ routines would be needed,  and in addition to a GW core package (`gw`) providing R tools,  a similar set of core procedures in C++ may be needed.  In addition,  many users and developers of geographically weighted methods use Python rather than R.  Some consideration of interoperability could allow some degree of collaboration – working together to some extent could become possible via the use of the `reticulate` library, which allows Python code to run within R.  A longer term goal may be to provide a suite of Python modules mirroring the `gwverse` approach,  encouraging the same development framework to run in parallel for the R and Python user communities.
+
+Also,  interoperability between the `gwverse` approach and other R packages and package families can be considered.   For example,  many users are now trained to work primarily with pipeline operators in R (either the `%>%` operator from `magrittr`, or the native `|>` operator) and designing gwverse functions to combine simply and intuitively with tools from other packages is an important consideration.  This involves thought about which argument in `gwverse` functions should be first,  and what form the returned value of the functions take.  Ideally,  one would wish `gwverse` functions to combine easily with functions from `sf`  and data manipulation tools from `tidyverse`.
+
+Some organizational issues also require consideration. In particular we are proposing a family of R packages,  maintained on GitHub,  with periodic updates to CRAN.   Although the approach here involves – and indeed encourages – collaboration, the project will require curation (much as CRAN does,  but on a much smaller scale),  and some structure for this needs to be agreed. This needs to address standards for package `gwverse` contribution – for example,  checking that the package properly meets the function naming requirements set out above,   and assessing whether any attached vignettes are well written and with sufficient content,  and checking whether CRAN’s requirements are met when versions are submitted there. There may also be issues of managing contributions – for example if two contributors simultaneously propose packages for the same (or at least overlapping) GW techniques.  Another related issue may be to create guidelines for developers,  possibly combined with a 'how-to' manual outlining the use of GitHub,  and the agreed curation framework.  In this way users who have a question with no current means of investigation could be encouraged to become developers.
+
+In conclusion, in this paper we have presented a framework for developing a consistent and interoperable family of R packages for geographically weighted analytical methods.  We advocate the use of functionals and function factories as key principles in this framework. This offers a number of advantages: it facilitates the creation of packages having a consistent interface – so that for example an argument to a function specifying bandwidth always has the same name and the data supplied always has the same format. In addition,  the use of a GW core package ensures that procedures appearing in several geographically weighted methods do not have to be re-created repeatedly (and possibly inconsistently) in several packages. With current trends suggesting an increasing interest in a number of new approaches, such as space-time weighting and multiscale models, perhaps now is an advantageous time to provide a consistent set of tools for software development.   Potentially this brings together disparate GW working groups (of both users and developers) together under the same framework with mutual benefit to all, allowing rapid development of new GW models with a more streamlined community review process.
+
+\newpage
+
+# Appendix: the current structure of the `GWmodel` package
+
+
+## Overview
+
+`GWmodel` includes functions to calibrate and estimate a wide range of techniques based on geographical weighting. These include: summary statistics, principal components analysis, discriminant analysis and various forms of regression; some of which are provided in basic and outlier resistant forms.
+
+However the manual is, at the time of writing is long, some 85 pages in length. It is also organised alphabetically, and while the write-ups conform to the CRAN guidelines, they can be hard to follow. For some of the more complex techniques there is little to guide the user as to which functions to use. This appendix provides a structured overview of the `GWmodel` library. It has been divided into sections, each section containing a group of related functions. Each section is headed with a summary table, giving the name of each function and a one-line description of its action. Below each table a bulleted list containing slightly more extended, but brief, descriptions of the function.
+
+```{tikz, echo=FALSE, fig.align="center", out.width="0.9\\linewidth",fig.cap='An  Ontology of GW Approaches Currently in GWmodel.'}
+\usetikzlibrary{arrows,shapes,positioning,shadows,trees}
+
+\tikzset{
+  basic/.style  = {draw, text width=2.5cm, drop shadow, font=\sffamily, rectangle},
+  root/.style   = {basic, rounded corners=2pt, align=center,
+                   fill=brown!30},
+  level 2/.style = {basic, rounded corners=6pt, align=center, fill=brown!60,
+                   text width=8em},
+  level 3/.style = {basic, align=left, fill=pink!60!brown, text width=6.5em}
+}
+
+\begin{tikzpicture}[
+  level 1/.style={sibling distance=40mm},
+  edge from parent/.style={->,draw},
+  >=latex]
+
+% root of the the initial tree, level 1
+\node[root] {Geographically Weighted Methods}
+% The first level, as children of the initial tree
+  child {node[level 2] (c1) {1. GW Descriptive Statistics}}
+  child {node[level 2] (c2) {2. GW Regression}}
+  child {node[level 2] (c3) {3. GW PCA}}
+  child {node[level 2] (c4) {4. GW Discriminant Analysis}};
+
+% The second level, relatively positioned nodes
+\begin{scope}[every node/.style={level 3}]
+
+\node [below of = c1, xshift=15pt] (c11) {Standard};
+\node [below of = c11] (c12) {Robust};
+
+
+\node [below of = c2, xshift=15pt] (c21) {Standard (Gaussian)};
+\node [below of = c21] (c22) {Robust};
+\node [below of = c22] (c23) {Heteroskedastic}; 
+\node [below of = c23] (c24) {2.1 Generalised};
+\node [below of = c24] (c25) {2.2 Locally Compensated};
+\node [below of = c25] (c26) {2.3 Multiscale};
+\node [below of = c26] (c27) {2.4 Spatio-temporal};
+
+\node [below of = c3, xshift=15pt] (c31) {Standard};
+\node [below of = c31] (c32) {Robust};
+
+  
+\node [below of = c4, xshift=15pt] (c41) {Standard};
+
+  
+\end{scope}
+
+% lines from each level 1 node to every one of its "children"
+\foreach \value in {1,...,2}
+  \draw[->] (c1.200) |- (c1\value.west);
+
+\foreach \value in {1,...,7}
+  \draw[->] (c2.193) |- (c2\value.west);
+
+\foreach \value in {1,...,2}
+  \draw[->] (c3.191) |- (c3\value.west);
+  
+\foreach \value in {1,...,1}
+  \draw[->] (c4.202) |- (c4\value.west);
+  
+\end{tikzpicture}
+```
+
+## Datasets
+There are several built-in datasets. Most of these are used in the example code which is provided at the end of each function description. However, you can also use them to practice on, or as test data in their own right. With the exception of `Georgia` these are all in Spatial Polygon or Spatial Point Data Frame `sp` formats.
+
++ `Dubvoter`: Voter turnout and social characters data in Greater Dublin for the 2002 General election and the 2002 census. Note that this data set was originally thought to relate to 2004, so for continuity we have retained the associated variable names.
++ `EWHP`: A house price data set for England and Wales from 2001 with 9 hedonic (explanatory) variables.
++ `EWOutline`: Outline (SpatialPolygonsDataFrame) of the England and Wales house price data EWHP
++ `Georgia`: Census data from the county of Georgia, USA
++ `GeorgiaCounties`: The Georgia census data with boundaries for mapping
++ `LondonBorough`: Outline (SpatialPolygonsDataFrame) of London boroughs for the `LondonHP` data.
++ `LondonHP`: A house price data set with 18 hedonic variables for London in 2001.
++  `USelect`: Results of the 2004 US presidential election at the county level, together with five socio-economic (census) variables. This data can be used with GW Discriminant Analysis.
+
+## Service functions
+
++ `gw.dist`: Calculate a distance vector(matrix) between any GW model calibration point(s) and the data points.
++ `gw.weight`: Calculate a weight vector(matrix) from a distance vector(matrix).
++ `gwr.write`: This function writes the calibration result of function `gwr.basic` to a text file
++ `gwr.write.shp`: This function writes the calibration result of function `gwr.basic` to a shapefile
+
+## 1. GW Descriptive statistics
+
++ `bw.gwss.average`: A function for automatic bandwidth selections to calculate GW summary averages, including means and medians, via a cross-validation approach.
++ `gwss`: This function calculates basic and robust GWSS. This includes geographically weighted means, standard deviations and skew. Robust alternatives include geographically weighted medians, interquartile ranges and quantile imbalances. This function also calculates basic geographically weighted covariances together with basic and robust geographically weighted correlations.
++ `gwss.montecarlo`: This function implements Monte Carlo (randomisation) tests for the GW summary statistics found in `gwss`.
++ `gw.pcplot`: This function provides a geographically weighted parallel coordinate plot for locally investigating a multivariate data set. It has an option that weights the lines of the plot with increasing levels of transparency, according to their observation’s distance from a specified focal/observation point.
++ `gwpca.glyph.plot`: This function provides a multivariate glyph plot of GWPCA loadings at each output location.
+
+## 2. GW (gaussian) Regression
+
++ `bw.gwr`: A function for automatic bandwidth selection to calibrate a basic GWR model.
++ `gwr.basic`: This function implements basic GWR.
++ `gwr.robust`: This function implements two robust GWR models.
++ `gwr.hetero`: This function implements a heteroskedastic GWR model
++ `gwr.bootstrap`: This function implements bootstrap methods to test for coefficients.
++ `gwr.montecarlo`: This function implements a Monte Carlo (randomisation) test to test for significant (spatial) variability of a GWR model’s parameters or coefficients.
++ `gwr.t.adjust`: Given a set of p-values from the pseudo t-tests of basic GWR outputs, this function returns adjusted p-values using: (a) Bonferroni, (b) Benjamini-Hochberg, (c) Benjamini-Yekutieli and (d) Fotheringham-Byrne procedures.
++ `gwr.model.selection`: This function selects one GWR model from many alternatives based on the AICc values.
++ `gwr.model.sort`: Sort the results from the GWR model selection function `gwr.model.selection`.
++ `gwr.model.view`: This function visualises the GWR models from `gwr.model.selection`.
++ `gwr.mink.approach`: This function implements the Minkowski approach to select an optimum distance metric for calibrating a GWR model.
++ `gwr.mink.matrixview`: This function visualises the AICc/CV results from the `gwr.mink` approach.
++ `gwr.mink.pval`: These functions implement heuristics to select the values of p from two intervals: $(0,2]$ in a backward direction and $(2, \infty)$ in a forward direction.
+
+### 2.1 Generalsed GWR
+
++ `bw.ggwr`: A function for automatic bandwidth selection to calibrate a generalised GWR model.
++ `ggwr.basic`: This function implements generalised GWR.
++ `ggwr.cv`: This function finds the cross-validation score for a specified bandwidth for generalised GWR. It can be used to construct the bandwidth function across all possible bandwidths and compared to that found automatically.
++ `ggwr.cv.contrib`: This function finds the individual cross-validation score at each observation location, for a generalised GWR model, for a specified bandwidth. These data can be mapped to detect unusually high or low cross-validations scores.
+
+### 2.2 Locally compensated regression
+
++ `bw.gwr.lcr`: A function for automatic bandwidth selection for `gwr.lcr` via a cross-validation approach only.
++ `gwr.lcr`: To address possible local collinearity problems in basic GWR, GWR-LCR finds local ridge parameters at affected locations (set by a user-specified threshold for the design matrix condition number).
++ `gwr.lcr.cv`: This function finds the cross-validation score for a specified bandwidth for GWR-LCR. It can be used to construct the bandwidth function across all possible bandwidths and compared to that found automatically.
++ `gwr.lcr.cv.contrib`: This function finds the individual cross-validation score at each observation location, for a GWRLCR model, for a specified bandwidth. These data can be mapped to detect unusually high or low cross-validations scores.
++ `gwr.collin.diagno`: This function provides a series of local collinearity diagnostics for the independent variables of a basic GWR model.
+
+### 2.3 Multiscale GWR
+
++ `gwr.mixed`: This function implements mixed (semi-parametric) GWR.
++ `gwr.multiscale`: This function implements multiscale GWR to detect variations in regression relationships across different spatial scales. This function can not only find a different bandwidth for each relationship but also (and simultaneously) find a different distance metric for each relationship (if required to do so).
+
+### 2.4 Geographically and temporally weighted regression
+
++ `bw.gtwr`: A function for automatic bandwidth selection to calibrate a Geographically and Temporally Weighted Regression (GTWR) model.
++ `gtwr`: A function for calibrating a GTWR model.
+
+## 3. Geographically weighted principal components analysis
+
++ `bw.gwpca`: A function for automatic bandwidth selection to calibrate a basic or robust GWPCA via a cross-validation approach only
++ `gwpca`: This function implements basic or robust GWPCA.
++ `gwpca.check.components`: The function interacts with the multivariate glyph plot of GWPCA loadings.
++ `gwpca.cv`: This function finds the cross-validation score for a specified bandwidth for basic or robust GWPCA. It can be used to construct the bandwidth function across all possible bandwidths and compared to that found automatically.
++ `gwpca.cv.contrib`: This function finds the individual cross-validation score at each observation location, for a GWPCA model, for a specified bandwidth. These data can be mapped to detect unusually high or low cross-validation scores
++ `gwpca.montecarlo.1`: This function implements a Monte Carlo (randomisation) test for a basic or robust GW PCA with the bandwidth pre-specified and constant. The test evaluates whether the GW eigenvalues vary significantly across space for the first component only.
++ `gwpca.montecarlo.2`: This function implements a Monte Carlo (randomisation) test for a basic or robust GW PCA with the bandwidth automatically re-selected via the cross-validation approach. The test evaluates whether the GW eigenvalues vary significantly across space for the first component only.
+
+## 4. Geographically weighted discriminant analysis
+
++ `bw.gwda`: A function for automatic bandwidth selection for GW Discriminant Analysis using a cross-validation approach only
++ `gwda`: A function to implement GW discriminant analysis.
+
+# References
+
+
